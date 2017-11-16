@@ -49,5 +49,5 @@ class ViewContextualFilterInputDeriver extends ViewDeriverBase implements Contai
 
     return parent::getDerivativeDefinitions($basePluginDefinition);
   }
-  
+
 }
