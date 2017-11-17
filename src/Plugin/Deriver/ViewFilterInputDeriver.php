@@ -3,7 +3,6 @@
 namespace Drupal\graphql_views\Plugin\Deriver;
 
 use Drupal\Core\Plugin\Discovery\ContainerDeriverInterface;
-use Drupal\graphql\Utility\StringHelper;
 use Drupal\views\Views;
 
 /**
@@ -20,28 +19,33 @@ class ViewFilterInputDeriver extends ViewDeriverBase implements ContainerDeriver
     foreach (Views::getApplicableViews('graphql_display') as list($viewId, $displayId)) {
       /** @var \Drupal\views\ViewEntityInterface $view */
       $view = $viewStorage->load($viewId);
-      if (!$this->getRowResolveType($view, $displayId)) {
+      $display = $this->getViewDisplay($view, $displayId);
+
+      if (!$type = $this->getEntityTypeByTable($view->get('base_table'))) {
+        // Skip for now, switch to different response type later when
+        // implementing fieldable views display support.
         continue;
       }
 
-      $display = $this->getViewDisplay($view, $displayId);
       $id = implode('_', [$viewId, $displayId, 'view', 'filter', 'input']);
 
-      // Re-key filters by filter identifier.
-      $filters = array_reduce(array_filter($display->getOption('filters') ?: [], function($filter) {
+      $filters = array_filter($display->getOption('filters') ?: [], function ($filter) {
         return array_key_exists('exposed', $filter) && $filter['exposed'];
-      }), function($carry, $current) {
-        return $carry + [
-            $current['expose']['identifier'] => $current,
-          ];
-      }, []);
+      });
 
       // If there are no exposed filters, don't create the derivative.
-      if (empty($filters)) {
+      if (!$filters) {
         continue;
       }
 
-      $fields = array_map(function($filter) use ($basePluginDefinition) {
+      //Re-key $filters by filter_identifier
+      $newFilters = [];
+      foreach ($filters as $key => $value) {
+        $newFilters[$value['expose']['identifier']] = $value;
+      }
+      $filters = $newFilters;
+
+      $fields = array_map(function ($filter) use ($basePluginDefinition) {
         if ($this->isGenericInputFilter($filter)) {
           return $this->createGenericInputFilterDefinition($filter, $basePluginDefinition);
         }
@@ -54,12 +58,12 @@ class ViewFilterInputDeriver extends ViewDeriverBase implements ContainerDeriver
       }, $filters);
 
       $this->derivatives[$id] = [
-          'id' => $id,
-          'name' => StringHelper::camelCase($id),
-          'fields' => $fields,
-          'view' => $viewId,
-          'display' => $displayId,
-        ] + $basePluginDefinition;
+        'id' => $id,
+        'name' => graphql_camelcase($id),
+        'fields' => $fields,
+        'view' => $viewId,
+        'display' => $displayId,
+      ] + $basePluginDefinition;
     }
 
     return parent::getDerivativeDefinitions($basePluginDefinition);
@@ -81,14 +85,14 @@ class ViewFilterInputDeriver extends ViewDeriverBase implements ContainerDeriver
    *   ];
    * @return bool
    */
-  public function isGenericInputFilter($filter) {
-    if (!is_array($filter['value']) || count($filter['value']) == 0) {
-      return false;
-    }
+   public function isGenericInputFilter($filter) {
+     if (!is_array($filter['value']) || count($filter['value']) == 0) {
+       return false;
+     }
 
-    $firstKey = array_keys($filter['value'])[0];
-    return is_string($firstKey);
-  }
+     $firstKey = array_keys($filter['value'])[0];
+     return is_string($firstKey);
+   }
 
   /**
    * Creates a definition for a generic input filter.
@@ -108,6 +112,7 @@ class ViewFilterInputDeriver extends ViewDeriverBase implements ContainerDeriver
    * @return array
    */
   public function createGenericInputFilterDefinition($filter, $basePluginDefinition) {
+
     $filterId = $filter['expose']['identifier'];
 
     $id = implode('_', [
@@ -119,7 +124,7 @@ class ViewFilterInputDeriver extends ViewDeriverBase implements ContainerDeriver
 
     $fields = [];
     foreach ($filter['value'] as $fieldKey => $fieldDefaultValue) {
-      $fields[$fieldKey] = [
+      $fields[ $fieldKey ] = [
         'type' => 'String',
         'nullable' => TRUE,
         'multi' => FALSE,
@@ -127,10 +132,10 @@ class ViewFilterInputDeriver extends ViewDeriverBase implements ContainerDeriver
     }
 
     $genericInputFilter = [
-        'id' => $id,
-        'name' => StringHelper::camelCase($id),
-        'fields' => $fields,
-      ] + $basePluginDefinition;
+      'id' => $id,
+      'name' => graphql_camelcase($id),
+      'fields' => $fields,
+    ] + $basePluginDefinition;
 
     $this->derivatives[$id] = $genericInputFilter;
 

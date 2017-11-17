@@ -10,23 +10,21 @@ use Youshido\GraphQL\Execution\ResolveInfo;
  * Expose views as root fields.
  *
  * @GraphQLField(
- *   id = "view_result",
+ *   id = "view_count",
  *   secure = true,
- *   multi = true,
- *   deriver = "Drupal\graphql_views\Plugin\Deriver\ViewResultListDeriver"
+ *   name = "count",
+ *   nullable = false,
+ *   type = "Int"
  * )
  */
-class ViewResultList extends FieldPluginBase {
+class ViewCount extends FieldPluginBase {
 
   /**
    * {@inheritdoc}
    */
-  protected function resolveValues($value, array $args, ResolveInfo $info) {
+  public function resolveValues($value, array $args, ResolveInfo $info) {
     if ($value instanceof ViewExecutable) {
-
-      foreach ($value->result as $row) {
-        yield $row->_entity;
-      }
+      yield intval($value->total_rows);
     }
   }
 

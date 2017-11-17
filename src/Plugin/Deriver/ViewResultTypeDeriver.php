@@ -2,7 +2,6 @@
 
 namespace Drupal\graphql_views\Plugin\Deriver;
 
-use Drupal\graphql\Utility\StringHelper;
 use Drupal\views\Views;
 
 /**
@@ -19,20 +18,27 @@ class ViewResultTypeDeriver extends ViewDeriverBase {
     foreach (Views::getApplicableViews('graphql_display') as list($viewId, $displayId)) {
       /** @var \Drupal\views\ViewEntityInterface $view */
       $view = $viewStorage->load($viewId);
-      if (!$this->getRowResolveType($view, $displayId)) {
+      $display = $this->getViewDisplay($view, $displayId);
+
+      if (!$this->isPaged($display)) {
+        // Skip if the display doesn't expose a pager.
         continue;
       }
 
-      /** @var \Drupal\graphql\Plugin\views\display\GraphQL $display */
-      $display = $this->getViewDisplay($view, $displayId);
+      if (!$type = $this->getEntityTypeByTable($view->get('base_table'))) {
+        // Skip for now, switch to different response type later when
+        // implementing fieldable views display support.
+        continue;
+      }
 
       $id = implode('-', [$viewId, $displayId, 'result']);
+
       $this->derivatives[$id] = [
-          'id' => $id,
-          'name' => $display->getGraphQLResultName(),
-          'view' => $viewId,
-          'display' => $displayId,
-        ] + $basePluginDefinition;
+        'id' => $id,
+        'name' => graphql_camelcase($id),
+        'view' => $viewId,
+        'display' => $displayId,
+      ] + $basePluginDefinition;
     }
 
     return parent::getDerivativeDefinitions($basePluginDefinition);
